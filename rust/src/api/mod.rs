@@ -1,9 +1,29 @@
 use crate::blockchain::GTKContract;
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpResponse, HttpServer, Responder, http::StatusCode, web};
+use serde::Deserialize;
 
 #[actix_web::get("/")]
 async fn index(contract: web::Data<GTKContract>) -> String {
     contract.contract_name().await.unwrap()
+}
+
+#[derive(Debug, Deserialize)]
+struct MintInfo {
+    to: String,
+    token_id: usize,
+    token_uri: String,
+}
+
+#[actix_web::post("/mint")]
+async fn mint(contract: web::Data<GTKContract>, input: web::Json<MintInfo>) -> impl Responder {
+    println!("minting token id: {} to: {}", input.token_id, input.to);
+
+    contract
+        .mint_nft(&input.to, input.token_id, &input.token_uri)
+        .await
+        .unwrap();
+
+    HttpResponse::new(StatusCode::OK)
 }
 
 pub async fn start_server() -> std::io::Result<()> {
@@ -13,6 +33,7 @@ pub async fn start_server() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(contract.clone()))
             .service(index)
+            .service(mint)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

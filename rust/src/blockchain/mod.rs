@@ -3,7 +3,7 @@ use GenesisToken::GenesisTokenInstance;
 
 use alloy::{
     network::EthereumWallet,
-    primitives::Address,
+    primitives::{Address, U256},
     providers::{
         ProviderBuilder, RootProvider,
         fillers::{FillProvider, JoinFill, WalletFiller},
@@ -27,6 +27,7 @@ type GTKProvider =
 #[derive(Clone)]
 pub struct GTKContract {
     contract: GenesisTokenInstance<(), GTKProvider>,
+    owner_address: Address,
 }
 
 impl GTKContract {
@@ -53,11 +54,30 @@ impl GTKContract {
         let contract = GenesisToken::new(Address::from_str(&nft_contract_address)?, provider);
 
         // Create a contract instance.
-        Ok(Self { contract })
+        Ok(Self {
+            contract,
+            owner_address: default_signer.address(),
+        })
     }
 
     pub async fn contract_name(&self) -> Result<String> {
         Ok(self.contract.name().call().await?._0)
+    }
+
+    pub async fn mint_nft(&self, to: &str, token_id: usize, token_uri: &str) -> Result<()> {
+        self.contract
+            .safeMint(
+                Address::from_str(to)?,
+                U256::from(token_id),
+                token_uri.to_string(),
+            )
+            .from(self.owner_address)
+            .send()
+            .await?
+            .watch()
+            .await?;
+
+        Ok(())
     }
 }
 
