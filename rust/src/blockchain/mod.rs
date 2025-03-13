@@ -32,31 +32,19 @@ pub struct GTKContract {
 
 impl GTKContract {
     pub async fn new() -> Result<Self> {
-        println!("creating new contract instance...");
-        // let alchemy_sepolia_url = env::var("ALCHEMY_SEPOLIA_URL")?;
         let nft_contract_address = env::var("NFT_CONTRACT_ADDRESS")?;
-
-        let testing_network_url = env::var("TESTING_NETWORK_URL")?;
-        let owner_private_address = env::var("OWNER_PRIVATE_ADDRESS")?; // only owner can mint nfts
-        let testing_account1_private_key: PrivateKeySigner =
-            env::var("TESTING_ACCOUNT1_PRIVATE_KEY")?.parse()?;
+        let url = env::var("NETWORK_URL")?;
+        let owner_private_key: PrivateKeySigner = env::var("OWNER_PRIVATE_KEY")?.parse()?; // only owner can mint nfts
 
         // adding addresses for signing
-        let default_signer: PrivateKeySigner = owner_private_address.parse()?;
-        // Todo - check for dynamic adding of signers
-        let mut wallet = EthereumWallet::from(default_signer.clone());
-        wallet.register_signer(testing_account1_private_key);
-
-        let provider = ProviderBuilder::new()
-            .wallet(wallet)
-            .on_http(testing_network_url.parse()?);
+        let wallet = EthereumWallet::from(owner_private_key.clone());
+        let provider = ProviderBuilder::new().wallet(wallet).on_http(url.parse()?);
 
         let contract = GenesisToken::new(Address::from_str(&nft_contract_address)?, provider);
 
-        // Create a contract instance.
         Ok(Self {
             contract,
-            owner_address: default_signer.address(),
+            owner_address: owner_private_key.address(),
         })
     }
 
@@ -83,49 +71,80 @@ impl GTKContract {
 
 #[tokio::test]
 async fn test_contract() -> Result<()> {
+    use alloy::{
+        consensus::{SignableTransaction, TxLegacy},
+        network::TxSigner,
+        primitives::TxKind,
+        providers::Provider,
+    };
+
     dotenv::dotenv().ok();
 
-    let contract = GTKContract::new().await?.contract;
+    let contract = GTKContract::new().await.unwrap().contract;
+    let provider = contract.provider();
+
     let contract_owner = Address::from_str(&env::var("INITIAL_OWNER")?)?;
-    let testing_account1_private_key: PrivateKeySigner =
-        env::var("TESTING_ACCOUNT1_PRIVATE_KEY")?.parse()?;
+
+    let test_acc1: PrivateKeySigner = env::var("TESTING_ACCOUNT1_PRIVATE_KEY")?.parse()?;
 
     // calling a contract method
     let contract_name = contract.name().call().await?._0;
     println!("Contract name: {contract_name}");
 
     // calling contract to mint nft
-    let token_id = alloy::primitives::U256::from(5);
-    let token_owner = testing_account1_private_key.address();
-    let _mint= contract.safeMint(
-        token_owner,
-        token_id,
-        String::from("https://gateway.pinata.cloud/ipfs/bafkreifsbhqh4lb3k7n3usnkecxdzv6ef4bahft5sbzru6tc3qebruejcq"),
-    ).from(contract_owner).send().await?.watch().await?;
+    let ptr = Box::into_raw(Box::new(123));
+    println!("token: {}", ptr as usize);
+    let token_id = alloy::primitives::U256::from(ptr as usize);
 
-    println!("{:?}", _mint);
+    let _mint= contract.safeMint(
+        test_acc1.address(),
+            token_id,
+            String::from("https://gateway.pinata.cloud/ipfs/bafkreifsbhqh4lb3k7n3usnkecxdzv6ef4bahft5sbzru6tc3qebruejcq"),
+        ).from(contract_owner).send().await?.watch().await?;
 
     let owner = contract.ownerOf(token_id).call().await?._0;
-    println!("Owner: {owner}");
+    println!("Owner of {token_id}: {owner}");
 
-    assert_eq!(owner, token_owner);
-
-    // example of transferring nft
+    assert_eq!(owner, test_acc1.address());
 
     println!(
-        "\nTransferring 0 from {:?} to {:?}",
-        token_owner, contract_owner
+        "\nTransferring {token_id} from {:?} to {:?}",
+        test_acc1.address(),
+        contract_owner
     );
-    contract
-        .safeTransferFrom_0(token_owner, contract_owner, token_id)
-        .from(token_owner)
-        .send()
-        .await?
+
+    let data = contract
+        .safeTransferFrom_0(test_acc1.address(), contract_owner, token_id)
+        .calldata()
+        .clone();
+
+    let mut tx = TxLegacy {
+        chain_id: Some(provider.get_chain_id().await?),
+        nonce: provider.get_transaction_count(test_acc1.address()).await?,
+        gas_price: provider.get_gas_price().await?,
+        gas_limit: 80000,
+        to: TxKind::Call(contract.address().clone()),
+        input: data.clone(),
+        value: Default::default(),
+    };
+
+    let signature = test_acc1.sign_transaction(&mut tx).await?;
+
+    let mut out = Vec::new();
+    tx.into_signed(signature).rlp_encode(&mut out);
+
+    let _pending_tx = contract
+        .provider()
+        .send_raw_transaction(&out)
+        .await
+        .unwrap()
         .watch()
         .await?;
 
     let owner = contract.ownerOf(token_id).call().await?._0;
-    println!("Owner: {owner}");
+    println!("Owner({token_id}): {owner}");
+
+    assert_eq!(owner, contract_owner);
 
     Ok(())
 }
