@@ -26,6 +26,11 @@ async fn mint(contract: web::Data<GTKContract>, input: web::Json<MintInfo>) -> i
     HttpResponse::new(StatusCode::OK)
 }
 
+#[actix_web::get("/owner/{token_id}")]
+async fn owner(contract: web::Data<GTKContract>, token_id: web::Path<usize>) -> impl Responder {
+    contract.owner_of_token(token_id.into_inner()).await
+}
+
 pub async fn start_server() -> std::io::Result<()> {
     let contract = GTKContract::new().await.unwrap();
 
@@ -34,6 +39,7 @@ pub async fn start_server() -> std::io::Result<()> {
             .app_data(web::Data::new(contract.clone()))
             .service(index)
             .service(mint)
+            .service(owner)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

@@ -67,6 +67,16 @@ impl GTKContract {
 
         Ok(())
     }
+
+    pub async fn owner_of_token(&self, id: usize) -> Result<String> {
+        Ok(self.contract
+            .ownerOf(U256::from(id))
+            .call()
+            .await?
+            ._0
+            .to_string())
+    }
+
 }
 
 #[tokio::test]
