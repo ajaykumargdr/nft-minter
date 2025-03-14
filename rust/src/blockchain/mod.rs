@@ -2,10 +2,11 @@ use super::Result;
 use GenesisToken::GenesisTokenInstance;
 
 use alloy::{
-    network::EthereumWallet,
-    primitives::{Address, U256},
+    consensus::{SignableTransaction, TxLegacy},
+    network::{EthereumWallet, TxSigner},
+    primitives::{Address, TxKind, U256},
     providers::{
-        ProviderBuilder, RootProvider,
+        Provider, ProviderBuilder, RootProvider,
         fillers::{FillProvider, JoinFill, WalletFiller},
         utils::JoinedRecommendedFillers,
     },
@@ -69,7 +70,8 @@ impl GTKContract {
     }
 
     pub async fn owner_of_token(&self, id: usize) -> Result<String> {
-        Ok(self.contract
+        Ok(self
+            .contract
             .ownerOf(U256::from(id))
             .call()
             .await?
@@ -77,6 +79,46 @@ impl GTKContract {
             .to_string())
     }
 
+    pub async fn transfer_nft(&self, from: &str, to: &str, token_id: usize) -> Result<()> {
+        // Todo : use keystore and wallet
+        let signer = from.parse::<PrivateKeySigner>()?;
+        let signer_address = signer.address();
+
+        // Todo : implement transaction using eip-1559
+        let data = self
+            .contract
+            .safeTransferFrom_0(signer_address, Address::from_str(to)?, U256::from(token_id))
+            .calldata()
+            .clone();
+
+        let provider = self.contract.provider();
+
+        let mut tx = TxLegacy {
+            chain_id: Some(provider.get_chain_id().await?),
+            nonce: provider.get_transaction_count(signer_address).await?,
+            gas_price: provider.get_gas_price().await?,
+            gas_limit: 80000,
+            to: TxKind::Call(self.contract.address().clone()),
+            input: data.clone(),
+            value: Default::default(),
+        };
+
+        let signature = signer.sign_transaction(&mut tx).await?;
+
+        let mut out = Vec::new();
+        tx.into_signed(signature).rlp_encode(&mut out);
+
+        let _pending_tx = self
+            .contract
+            .provider()
+            .send_raw_transaction(&out)
+            .await
+            .unwrap()
+            .watch()
+            .await?;
+
+        Ok(())
+    }
 }
 
 #[tokio::test]
