@@ -1,24 +1,12 @@
 use crate::blockchain::GTKContract;
 use actix_web::{App, HttpResponse, HttpServer, Responder, http::StatusCode, web};
-use serde::Deserialize;
+
+mod types;
+use types::*;
 
 #[actix_web::get("/")]
 async fn index(contract: web::Data<GTKContract>) -> String {
     contract.contract_name().await.unwrap()
-}
-
-#[derive(Debug, Deserialize)]
-struct MintInfo {
-    to: String,
-    token_id: usize,
-    token_uri: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct TransferInfo {
-    from: String,
-    to: String,
-    token_id: usize,
 }
 
 #[actix_web::post("/mint")]
