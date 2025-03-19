@@ -19,7 +19,7 @@ sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     GenesisToken,
-    "../hardhat/artifacts/contracts/GenesisToken.sol/GenesisToken.json"
+    "../artifacts/contracts/GenesisToken.sol/GenesisToken.json"
 );
 
 type GTKProvider =
