@@ -49,7 +49,7 @@ pub async fn start_server() -> std::io::Result<()> {
             .service(owner)
             .service(transfer_nft)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 8080))?
     .run()
     .await
 }
