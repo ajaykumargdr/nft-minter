@@ -129,4 +129,5 @@ artifacts/contracts/**/*.dbg.json
 */coverage
 */coverage.json
 
-*.qodo
+.qodo
+.vscode
