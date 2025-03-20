@@ -24,3 +24,6 @@
 /target
 LICENSE
 README.md
+artifacts/*
+artifacts/contracts/**/*.dbg.json
+!artifacts/contracts/
