@@ -10,8 +10,7 @@ RUN cd /app/rust && cargo build --release
 FROM rust:1.85.0-slim-bookworm
 RUN mkdir /app
 COPY --from=backend /app/rust/target/release/rust /app/rust
-COPY --from=backend /app/artifacts /app/artifacts
 WORKDIR /app
-CMD ["./app/rust/target/release/rust"]
+CMD ["./app/rust"]
 EXPOSE 8080
 ENV RUST_LOG="info"
