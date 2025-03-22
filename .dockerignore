@@ -21,7 +21,8 @@
 **/secrets.dev.yaml
 **/values.dev.yaml
 /bin
-/target
+target
+Cargo.lock
 LICENSE
 README.md
 artifacts/*
