@@ -15,6 +15,9 @@ use alloy::{
 };
 use std::{env, str::FromStr};
 
+mod types;
+pub use types::*;
+
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
@@ -118,6 +121,28 @@ impl GTKContract {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn get_metadata(&self, token_id: usize) -> Result<Metadata> {
+        let owner_address = self
+            .contract
+            .ownerOf(U256::from(token_id))
+            .call()
+            .await?
+            ._0
+            .to_string();
+
+        let token_uri = self
+            .contract
+            .tokenURI(U256::from(token_id))
+            .call()
+            .await?
+            ._0;
+
+        Ok(Metadata {
+            owner_address,
+            token_uri,
+        })
     }
 }
 

@@ -38,6 +38,17 @@ async fn transfer_nft(
         .await
 }
 
+#[actix_web::get("/metadata/{token_id}")]
+async fn metadata(contract: web::Data<GTKContract>, token_id: web::Path<usize>) -> impl Responder {
+    match contract.get_metadata(token_id.into_inner()).await {
+        Ok(metadata) => HttpResponse::Ok().json(metadata),
+        Err(_) =>{
+            // Todo : handle errors
+            HttpResponse::NotFound().finish()
+        }
+    }
+}
+
 pub async fn start_server() -> std::io::Result<()> {
     let contract = GTKContract::new().await.unwrap();
 
@@ -48,6 +59,7 @@ pub async fn start_server() -> std::io::Result<()> {
             .service(mint)
             .service(owner)
             .service(transfer_nft)
+            .service(metadata)
     })
     .bind(("0.0.0.0", 8080))?
     .run()
