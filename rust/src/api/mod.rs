@@ -1,5 +1,5 @@
 use crate::blockchain::GTKContract;
-use actix_web::{App, HttpResponse, HttpServer, Responder, http::StatusCode, web};
+use actix_web::{App, HttpResponse, HttpServer, Responder, http::StatusCode, web, middleware::Logger};
 
 mod types;
 use types::*;
@@ -54,6 +54,7 @@ pub async fn start_server() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
+        .wrap(Logger::default())
             .app_data(web::Data::new(contract.clone()))
             .service(index)
             .service(mint)
