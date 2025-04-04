@@ -2,6 +2,8 @@ use crate::blockchain::GTKContract;
 use actix_web::{App, HttpResponse, HttpServer, Responder, http::StatusCode, web, middleware::Logger};
 
 mod types;
+mod marketplace;
+
 use types::*;
 
 #[actix_web::get("/")]
@@ -61,6 +63,11 @@ pub async fn start_server() -> std::io::Result<()> {
             .service(owner)
             .service(transfer_nft)
             .service(metadata)
+            .service(marketplace::list)
+            .service(marketplace::get_listings)
+            .service(marketplace::buy)
+            .service(marketplace::update_listing)
+            .service(marketplace::cancel_listing)
     })
     .bind(("0.0.0.0", 8080))?
     .run()
