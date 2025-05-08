@@ -1,10 +1,18 @@
+use super::Result;
 use crate::blockchain::GTKContract;
-use actix_web::{App, HttpResponse, HttpServer, Responder, http::StatusCode, web, middleware::Logger};
+use actix_web::{
+    App, HttpResponse, HttpServer, Responder, http::StatusCode, middleware::Logger, web,
+};
+use std::sync::Mutex;
 
-mod types;
+mod auth;
 mod marketplace;
+mod types;
 
 use types::*;
+
+// Todo - move to db
+static USERS: Mutex<Vec<User>> = Mutex::new(Vec::new());
 
 #[actix_web::get("/")]
 async fn index(contract: web::Data<GTKContract>) -> String {
@@ -44,7 +52,7 @@ async fn transfer_nft(
 async fn metadata(contract: web::Data<GTKContract>, token_id: web::Path<usize>) -> impl Responder {
     match contract.get_metadata(token_id.into_inner()).await {
         Ok(metadata) => HttpResponse::Ok().json(metadata),
-        Err(_) =>{
+        Err(_) => {
             // Todo : handle errors
             HttpResponse::NotFound().finish()
         }
@@ -56,7 +64,7 @@ pub async fn start_server() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-        .wrap(Logger::default())
+            .wrap(Logger::default())
             .app_data(web::Data::new(contract.clone()))
             .service(index)
             .service(mint)
