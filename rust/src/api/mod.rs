@@ -3,9 +3,11 @@ use crate::blockchain::GTKContract;
 use actix_web::{
     App, HttpResponse, HttpServer, Responder, http::StatusCode, middleware::Logger, web,
 };
+use authentication::AuthenticationGuard;
 use std::sync::Mutex;
 
-mod auth;
+mod authentication;
+mod authorization;
 mod marketplace;
 mod types;
 
@@ -15,12 +17,17 @@ use types::*;
 static USERS: Mutex<Vec<User>> = Mutex::new(Vec::new());
 
 #[actix_web::get("/")]
-async fn index(contract: web::Data<GTKContract>) -> String {
+async fn index(auth_guard: AuthenticationGuard, contract: web::Data<GTKContract>) -> String {
+    println!("UserID: {}", auth_guard.user_id);
     contract.contract_name().await.unwrap()
 }
 
 #[actix_web::post("/mint")]
-async fn mint(contract: web::Data<GTKContract>, input: web::Json<MintInfo>) -> impl Responder {
+async fn mint(
+    _auth_guard: AuthenticationGuard,
+    contract: web::Data<GTKContract>,
+    input: web::Json<MintInfo>,
+) -> impl Responder {
     println!("minting token id: {} to: {}", input.token_id, input.to);
 
     contract
@@ -32,13 +39,18 @@ async fn mint(contract: web::Data<GTKContract>, input: web::Json<MintInfo>) -> i
 }
 
 #[actix_web::get("/owner/{token_id}")]
-async fn owner(contract: web::Data<GTKContract>, token_id: web::Path<usize>) -> impl Responder {
+async fn owner(
+    _auth_guard: AuthenticationGuard,
+    contract: web::Data<GTKContract>,
+    token_id: web::Path<usize>,
+) -> impl Responder {
     // Todo : handle errors
     contract.owner_of_token(token_id.into_inner()).await
 }
 
 #[actix_web::put("/transfer")]
 async fn transfer_nft(
+    _auth_guard: AuthenticationGuard,
     contract: web::Data<GTKContract>,
     input: web::Json<TransferInfo>,
 ) -> impl Responder {
@@ -49,7 +61,11 @@ async fn transfer_nft(
 }
 
 #[actix_web::get("/metadata/{token_id}")]
-async fn metadata(contract: web::Data<GTKContract>, token_id: web::Path<usize>) -> impl Responder {
+async fn metadata(
+    _auth_guard: AuthenticationGuard,
+    contract: web::Data<GTKContract>,
+    token_id: web::Path<usize>,
+) -> impl Responder {
     match contract.get_metadata(token_id.into_inner()).await {
         Ok(metadata) => HttpResponse::Ok().json(metadata),
         Err(_) => {
@@ -76,6 +92,7 @@ pub async fn start_server() -> std::io::Result<()> {
             .service(marketplace::buy)
             .service(marketplace::update_listing)
             .service(marketplace::cancel_listing)
+            .service(authorization::google_oauth_handler)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

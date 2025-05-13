@@ -1,10 +1,14 @@
-use super::*;
+use super::{
+    Result,
+    types::{QueryParams, TokenClaims, User},
+};
 use actix_web::{
+    HttpResponse, Responder,
     cookie::{Cookie, time::Duration as CookieDuration},
     http::header::LOCATION,
     web,
 };
-use jsonwebtoken::{self, EncodingKey, Header};
+use jsonwebtoken::{EncodingKey, Header};
 use reqwest::{Client, Url};
 use serde::Deserialize;
 
@@ -104,7 +108,7 @@ async fn google_oauth_handler(query: web::Query<QueryParams>) -> impl Responder 
     }
 
     let google_user = google_user.unwrap();
-    let mut users = USERS.lock().unwrap();
+    let mut users = super::USERS.lock().unwrap();
     let google_email = google_user.email.to_lowercase();
 
     let user = match users.iter().find(|user| user.email == google_email) {
@@ -124,7 +128,7 @@ async fn google_oauth_handler(query: web::Query<QueryParams>) -> impl Responder 
     };
 
     let jwt_secret = std::env::var("JWT_SECRET").unwrap();
-    let jwt_max_age = std::env::var("JWT_MAX_AGE")
+    let jwt_max_age = std::env::var("TOKEN_MAXAGE")
         .unwrap()
         .parse::<i64>()
         .unwrap();
