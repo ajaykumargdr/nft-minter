@@ -7,7 +7,7 @@ struct HcpClient {
     client: Client,
     access_token: String,
     expires_in: u64,
-    network_url: String,
+    hcp_endpoint: String,
     org_id: String,
     proj_id: String,
     app_name: String,
@@ -49,10 +49,15 @@ impl HcpClient {
 
         let body = response.json::<HcpAuth>().await?;
 
+        let hcp_endpoint = format!(
+            "https://api.cloud.hashicorp.com/secrets/2023-11-28/organizations/{}/projects/{}/apps/{}",
+            org_id, proj_id, app_name
+        );
+
         Ok(Self {
             client: client.clone(),
             access_token: body.access_token,
-            network_url: String::from("https://api.cloud.hashicorp.com"),
+            hcp_endpoint,
             org_id,
             proj_id,
             app_name,
@@ -63,10 +68,7 @@ impl HcpClient {
     }
 
     async fn create_secret(&self, key: &str, value: &str) -> Result<()> {
-        let url = format!(
-            "{}/secrets/2023-11-28/organizations/{}/projects/{}/apps/{}/secret/kv",
-            self.network_url, self.org_id, self.proj_id, self.app_name
-        );
+        let url = format!("{}/secret/kv", self.hcp_endpoint);
 
         let json = serde_json::json!({
             "name": key,
@@ -85,14 +87,9 @@ impl HcpClient {
     }
 
     async fn get_secret(&self, key: &str) -> Result<String> {
-        let url = format!(
-            "{}/secrets/2023-11-28/organizations/{}/projects/{}/apps/{}/secrets/{}:open",
-            self.network_url, self.org_id, self.proj_id, self.app_name, key
-        );
-
         let response = self
             .client
-            .get(url)
+            .get(format!("{}/secrets/{}:open", self.hcp_endpoint, key))
             .bearer_auth(&self.access_token)
             .send()
             .await?
@@ -104,6 +101,17 @@ impl HcpClient {
             Some(value) => Ok(value.to_string()),
             None => Err("Failed to get secret".into()),
         }
+    }
+
+    async fn delete_secret(&self, key: &str) -> Result<()> {
+        self.client
+            .delete(format!("{}/secrets/{}", self.hcp_endpoint, key))
+            .bearer_auth(&self.access_token)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
     }
 }
 
@@ -128,11 +136,16 @@ mod tests {
                 .unwrap();
 
         hcp_client
-            .create_secret("new_secret", "new_secret_value")
+            .create_secret("new_test_secret", "new_secret_value")
             .await
             .unwrap();
 
-        let value = hcp_client.get_secret("new_secret").await.unwrap();
+        let value = hcp_client.get_secret("new_test_secret").await.unwrap();
         assert_eq!(value, "new_secret_value");
+
+        hcp_client.delete_secret("new_test_secret").await.unwrap();
+
+        let value = hcp_client.get_secret("new_test_secret").await;
+        assert!(value.is_err());
     }
 }
