@@ -1,10 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+use crate::{blockchain::GTKContract, secret_storage::HcpClient};
+
 // Todo : remove unused derives
+
+#[derive(Clone)]
+pub struct ActixContext {
+    pub contract: GTKContract,
+    pub http_client: reqwest::Client,
+    pub secret_manager: HcpClient,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct MintInfo {
-    pub to: String,
+    // Todo : make token_id auto-increment
     pub token_id: usize,
     pub token_uri: String,
 }
@@ -16,14 +25,12 @@ pub struct TransferInfo {
     pub token_id: usize,
 }
 
-#[allow(unused)] // Todo : remove
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ListingInfo {
     pub token_id: usize,
     pub price: f64, // Todo : add more fields like expiration
 }
 
-#[allow(unused)] // Todo : remove
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     #[serde(rename = "code")]
@@ -34,6 +41,8 @@ pub struct QueryParams {
 pub struct User {
     pub id: String,
     pub email: String,
+    pub key_shares: [String; 2],
+    pub wallet_address: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

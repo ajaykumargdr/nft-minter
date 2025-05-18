@@ -1,6 +1,9 @@
+use crate::{blockchain, utils};
+use std::hash::{Hash, Hasher};
+
 use super::{
     Result,
-    types::{QueryParams, TokenClaims, User},
+    types::{ActixContext, QueryParams, TokenClaims, User},
 };
 use actix_web::{
     HttpResponse, Responder,
@@ -77,16 +80,17 @@ pub async fn get_google_user(
 }
 
 #[actix_web::get("/auth/google")]
-async fn google_oauth_handler(query: web::Query<QueryParams>) -> impl Responder {
+async fn google_oauth_handler(
+    context: web::Data<ActixContext>,
+    query: web::Query<QueryParams>,
+) -> impl Responder {
     if query.auth_code.is_empty() {
         return HttpResponse::Unauthorized().json(
             serde_json::json!({"status": "fail", "message": "Authorization code not provided!"}),
         );
     }
 
-    let client = Client::new();
-
-    let token_response = request_token(&client, &query.auth_code).await;
+    let token_response = request_token(&context.http_client, &query.auth_code).await;
 
     if token_response.is_err() {
         return HttpResponse::BadGateway()
@@ -96,7 +100,7 @@ async fn google_oauth_handler(query: web::Query<QueryParams>) -> impl Responder 
     let token_response = token_response.unwrap();
 
     let google_user = get_google_user(
-        &client,
+        &context.http_client,
         &token_response.access_token,
         &token_response.id_token,
     )
@@ -115,13 +119,34 @@ async fn google_oauth_handler(query: web::Query<QueryParams>) -> impl Responder 
         Some(user) => user.clone(),
         None => {
             let id = uuid::Uuid::new_v4().to_string();
+            let new_pk = blockchain::create_eth_account().unwrap();
+            let shares = utils::split_secret(&new_pk.credential().to_bytes()).unwrap();
 
             let user = User {
-                id,
+                id: id.clone(),
                 email: google_email,
+                key_shares: [shares[0].to_string(), shares[1].to_string()],
+                wallet_address: new_pk.address().to_string(),
             };
 
             users.push(user.clone());
+
+            let mut hasher = std::hash::DefaultHasher::new();
+            id.hash(&mut hasher);
+            let key = format!("S{}", &hasher.finish());
+
+            // Todo : improve encryption
+            match context.secret_manager.create_secret(&key, &shares[2]).await {
+                Ok(_) => {}
+                Err(_e) => {
+                    // Todo: add logs
+                    println!("creating secret failed! {:?}", _e);
+
+                    return HttpResponse::InternalServerError().json(
+                        serde_json::json!({"status": "fail", "message": "Internal Server Error"}),
+                    );
+                }
+            };
 
             user
         }

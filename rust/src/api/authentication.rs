@@ -1,11 +1,11 @@
+use super::types::User;
 use actix_web::{FromRequest, HttpRequest, dev::Payload, error as actix_error, http};
 use jsonwebtoken::{self as jwt, Algorithm, DecodingKey, Validation};
 use serde_json::json;
 use std::future;
 
 pub struct AuthenticationGuard {
-    #[allow(dead_code)]
-    pub user_id: String,
+    pub user: User,
 }
 
 impl FromRequest for AuthenticationGuard {
@@ -49,15 +49,14 @@ impl FromRequest for AuthenticationGuard {
                 let users = super::USERS.lock().unwrap();
                 let user = users.iter().find(|user| user.id == token.claims.sub);
 
-                if user.is_none() {
-                    return future::ready(Err(actix_error::ErrorUnauthorized(
-                        json!({"status": "fail", "message": "User belonging to this token no logger exists"}),
-                    )));
+                match user {
+                    Some(user) => future::ready(Ok(AuthenticationGuard { user: user.clone() })),
+                    None => {
+                        return future::ready(Err(actix_error::ErrorUnauthorized(
+                            json!({"status": "fail", "message": "User belonging to this token no logger exists"}),
+                        )));
+                    }
                 }
-
-                future::ready(Ok(AuthenticationGuard {
-                    user_id: token.claims.sub,
-                }))
             }
             Err(_) => future::ready(Err(actix_error::ErrorUnauthorized(
                 json!({"status": "fail", "message": "Invalid token or user doesn't exists"}),

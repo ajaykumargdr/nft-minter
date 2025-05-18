@@ -3,7 +3,8 @@ use reqwest::{Client, Method, header};
 use serde::Deserialize;
 
 #[allow(dead_code)]
-struct HcpClient {
+#[derive(Clone)]
+pub struct HcpClient {
     client: Client,
     access_token: String,
     expires_in: u64,
@@ -15,16 +16,16 @@ struct HcpClient {
     client_secret: String,
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct HcpAuth {
     access_token: String,
     expires_in: u64, // seconds
 }
 
+// Todo: implement refresh auth_token
 #[allow(dead_code)]
 impl HcpClient {
-    async fn auth(
+    pub async fn new(
         client: &Client,
         client_id: String,
         client_secret: String,
@@ -67,7 +68,7 @@ impl HcpClient {
         })
     }
 
-    async fn create_secret(&self, key: &str, value: &str) -> Result<()> {
+    pub async fn create_secret(&self, key: &str, value: &str) -> Result<()> {
         let url = format!("{}/secret/kv", self.hcp_endpoint);
 
         let json = serde_json::json!({
@@ -86,7 +87,7 @@ impl HcpClient {
         Ok(())
     }
 
-    async fn get_secret(&self, key: &str) -> Result<String> {
+    pub async fn get_secret(&self, key: &str) -> Result<String> {
         let response = self
             .client
             .get(format!("{}/secrets/{}:open", self.hcp_endpoint, key))
@@ -103,7 +104,7 @@ impl HcpClient {
         }
     }
 
-    async fn delete_secret(&self, key: &str) -> Result<()> {
+    pub async fn delete_secret(&self, key: &str) -> Result<()> {
         self.client
             .delete(format!("{}/secrets/{}", self.hcp_endpoint, key))
             .bearer_auth(&self.access_token)
@@ -131,7 +132,7 @@ mod tests {
 
         let client = Client::new();
         let hcp_client =
-            HcpClient::auth(&client, client_id, client_secret, org_id, proj_id, app_name)
+            HcpClient::new(&client, client_id, client_secret, org_id, proj_id, app_name)
                 .await
                 .unwrap();
 

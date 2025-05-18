@@ -1,4 +1,7 @@
-use super::{GTKContract, authentication::AuthenticationGuard, types::ListingInfo};
+use super::{
+    authentication::AuthenticationGuard,
+    types::{ActixContext, ListingInfo},
+};
 use actix_web::{HttpResponse, Responder, web};
 use std::sync::Mutex;
 
@@ -19,7 +22,7 @@ pub async fn list(
 #[actix_web::get("/listings")]
 pub async fn get_listings(
     _auth_guard: AuthenticationGuard,
-    _contract: web::Data<GTKContract>,
+    _context: web::Data<ActixContext>,
 ) -> impl Responder {
     let listing: Vec<ListingInfo> = LISTINGS.lock().unwrap().iter().map(|v| v.clone()).collect();
 
@@ -29,7 +32,7 @@ pub async fn get_listings(
 #[actix_web::post("/buy/{listing_id}")]
 pub async fn buy(
     _auth_guard: AuthenticationGuard,
-    _contract: web::Data<GTKContract>,
+    _context: web::Data<ActixContext>,
     _listing_id: web::Path<String>,
 ) -> impl Responder {
     // Todo - Transfer ownership of the token
@@ -40,7 +43,7 @@ pub async fn buy(
 #[actix_web::put("/updateListing/{listing_id}")]
 pub async fn update_listing(
     _auth_guard: AuthenticationGuard,
-    _contract: web::Data<GTKContract>,
+    _context: web::Data<ActixContext>,
     _listing_id: web::Path<String>,
     _listing_info: web::Json<ListingInfo>,
 ) -> impl Responder {
@@ -51,7 +54,7 @@ pub async fn update_listing(
 #[actix_web::delete("/cancelListing/{listing_id}")]
 pub async fn cancel_listing(
     _auth_guard: AuthenticationGuard,
-    _contract: web::Data<GTKContract>,
+    _context: web::Data<ActixContext>,
     _listing_id: web::Path<String>,
 ) -> impl Responder {
     // Todo - check the ownership of the token and remove token from the listing

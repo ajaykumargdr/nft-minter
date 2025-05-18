@@ -16,7 +16,10 @@ use alloy::{
 use std::{env, str::FromStr};
 
 mod types;
+mod utils;
+
 pub use types::*;
+pub use utils::*;
 
 sol!(
     #[allow(missing_docs)]

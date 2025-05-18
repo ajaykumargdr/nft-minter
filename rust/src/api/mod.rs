@@ -1,5 +1,5 @@
 use super::Result;
-use crate::blockchain::GTKContract;
+use crate::{blockchain::GTKContract, secret_storage::HcpClient};
 use actix_web::{
     App, HttpResponse, HttpServer, Responder, http::StatusCode, middleware::Logger, web,
 };
@@ -17,21 +17,31 @@ use types::*;
 static USERS: Mutex<Vec<User>> = Mutex::new(Vec::new());
 
 #[actix_web::get("/")]
-async fn index(auth_guard: AuthenticationGuard, contract: web::Data<GTKContract>) -> String {
-    println!("UserID: {}", auth_guard.user_id);
-    contract.contract_name().await.unwrap()
+async fn index(auth_guard: AuthenticationGuard, context: web::Data<ActixContext>) -> String {
+    let user = auth_guard.user;
+
+    println!("UserID: {}, Address: {}", user.id, user.wallet_address);
+
+    context.contract.contract_name().await.unwrap()
 }
 
+// Todo : get password
 #[actix_web::post("/mint")]
 async fn mint(
-    _auth_guard: AuthenticationGuard,
-    contract: web::Data<GTKContract>,
+    auth_guard: AuthenticationGuard,
+    context: web::Data<ActixContext>,
     input: web::Json<MintInfo>,
 ) -> impl Responder {
-    println!("minting token id: {} to: {}", input.token_id, input.to);
+    let user = auth_guard.user;
 
-    contract
-        .mint_nft(&input.to, input.token_id, &input.token_uri)
+    println!(
+        "minting token id: {} to: {}",
+        input.token_id, user.wallet_address
+    );
+
+    context
+        .contract
+        .mint_nft(&user.wallet_address, input.token_id, &input.token_uri)
         .await
         .unwrap();
 
@@ -41,21 +51,24 @@ async fn mint(
 #[actix_web::get("/owner/{token_id}")]
 async fn owner(
     _auth_guard: AuthenticationGuard,
-    contract: web::Data<GTKContract>,
+    context: web::Data<ActixContext>,
     token_id: web::Path<usize>,
 ) -> impl Responder {
     // Todo : handle errors
-    contract.owner_of_token(token_id.into_inner()).await
+    context.contract.owner_of_token(token_id.into_inner()).await
 }
 
 #[actix_web::put("/transfer")]
 async fn transfer_nft(
     _auth_guard: AuthenticationGuard,
-    contract: web::Data<GTKContract>,
+    context: web::Data<ActixContext>,
     input: web::Json<TransferInfo>,
 ) -> impl Responder {
+    // Todo : check owner first
+
     // Todo : handle errors
-    contract
+    context
+        .contract
         .transfer_nft(&input.from, &input.to, input.token_id)
         .await
 }
@@ -63,10 +76,10 @@ async fn transfer_nft(
 #[actix_web::get("/metadata/{token_id}")]
 async fn metadata(
     _auth_guard: AuthenticationGuard,
-    contract: web::Data<GTKContract>,
+    context: web::Data<ActixContext>,
     token_id: web::Path<usize>,
 ) -> impl Responder {
-    match contract.get_metadata(token_id.into_inner()).await {
+    match context.contract.get_metadata(token_id.into_inner()).await {
         Ok(metadata) => HttpResponse::Ok().json(metadata),
         Err(_) => {
             // Todo : handle errors
@@ -75,13 +88,29 @@ async fn metadata(
     }
 }
 
-pub async fn start_server() -> std::io::Result<()> {
+pub async fn start_server() -> Result<()> {
     let contract = GTKContract::new().await.unwrap();
 
-    HttpServer::new(move || {
+    let client = reqwest::Client::new();
+    let client_id = std::env::var("HCP_CLIENT_ID").unwrap();
+    let client_secret = std::env::var("HCP_CLIENT_SECRET").unwrap();
+    let org_id = std::env::var("HCP_ORG_ID").unwrap();
+    let proj_id = std::env::var("HCP_PROJ_ID").unwrap();
+    let app_name = std::env::var("HCP_APP_NAME").unwrap();
+
+    let secret_manager =
+        HcpClient::new(&client, client_id, client_secret, org_id, proj_id, app_name).await?;
+
+    let context = ActixContext {
+        contract,
+        http_client: client,
+        secret_manager,
+    };
+
+    Ok(HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .app_data(web::Data::new(contract.clone()))
+            .app_data(web::Data::new(context.clone()))
             .service(index)
             .service(mint)
             .service(owner)
@@ -96,5 +125,5 @@ pub async fn start_server() -> std::io::Result<()> {
     })
     .bind(("0.0.0.0", 8080))?
     .run()
-    .await
+    .await?)
 }
