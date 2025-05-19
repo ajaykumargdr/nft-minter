@@ -76,6 +76,7 @@ impl GTKContract {
     }
 
     pub async fn owner_of_token(&self, id: usize) -> Result<String> {
+        // Todo : handle id not exist error
         Ok(self
             .contract
             .ownerOf(U256::from(id))
@@ -85,9 +86,8 @@ impl GTKContract {
             .to_string())
     }
 
-    pub async fn transfer_nft(&self, from: &str, to: &str, token_id: usize) -> Result<()> {
-        // Todo : use keystore and wallet
-        let signer = from.parse::<PrivateKeySigner>()?;
+    pub async fn transfer_nft(&self, owner_pk: &Vec<u8>, to: &str, token_id: usize) -> Result<()> {
+        let signer = PrivateKeySigner::from_slice(&owner_pk)?;
         let signer_address = signer.address();
 
         // Todo : implement transaction using eip-1559

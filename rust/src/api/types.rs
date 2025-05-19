@@ -1,6 +1,7 @@
-use serde::{Deserialize, Serialize};
-
+use super::Result;
 use crate::{blockchain::GTKContract, secret_storage::HcpClient};
+use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 
 // Todo : remove unused derives
 
@@ -20,7 +21,6 @@ pub struct MintInfo {
 
 #[derive(Debug, Deserialize)]
 pub struct TransferInfo {
-    pub from: String,
     pub to: String,
     pub token_id: usize,
 }
@@ -50,4 +50,19 @@ pub struct TokenClaims {
     pub sub: String,
     pub iat: usize,
     pub exp: usize,
+}
+
+impl User {
+    pub async fn get_pk(&self, secret_manager: &HcpClient) -> Result<Vec<u8>> {
+        let mut hasher = std::hash::DefaultHasher::new();
+        self.id.hash(&mut hasher);
+        let key = format!("S{}", &hasher.finish());
+
+        let secret_share = secret_manager.get_secret(&key).await.unwrap();
+
+        let mut shares = self.key_shares.to_vec();
+        shares.push(secret_share);
+
+        crate::utils::recover_secret(&shares)
+    }
 }

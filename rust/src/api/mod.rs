@@ -26,6 +26,7 @@ async fn index(auth_guard: AuthenticationGuard, context: web::Data<ActixContext>
 }
 
 // Todo : get password
+// Todo : get gass fee
 #[actix_web::post("/mint")]
 async fn mint(
     auth_guard: AuthenticationGuard,
@@ -60,17 +61,37 @@ async fn owner(
 
 #[actix_web::put("/transfer")]
 async fn transfer_nft(
-    _auth_guard: AuthenticationGuard,
+    auth_guard: AuthenticationGuard,
     context: web::Data<ActixContext>,
     input: web::Json<TransferInfo>,
 ) -> impl Responder {
-    // Todo : check owner first
+    match context.contract.owner_of_token(input.token_id).await {
+        Ok(token_owner) => {
+            if token_owner != auth_guard.user.wallet_address {
+                return HttpResponse::Unauthorized().finish();
+            }
+        }
+        Err(_) => {
+            return HttpResponse::NotFound().finish();
+        }
+    };
 
-    // Todo : handle errors
-    context
-        .contract
-        .transfer_nft(&input.from, &input.to, input.token_id)
-        .await
+    match auth_guard.user.get_pk(&context.secret_manager).await {
+        Ok(owner_pk) => {
+            // Todo : handle errors
+            context
+                .contract
+                .transfer_nft(&owner_pk, &input.to, input.token_id)
+                .await
+                .unwrap();
+
+            HttpResponse::new(StatusCode::OK)
+        }
+        Err(err) => {
+            println!("Failed to recover secret: {}", err);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 #[actix_web::get("/metadata/{token_id}")]
