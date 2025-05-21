@@ -10,13 +10,23 @@ static LISTINGS: Mutex<Vec<ListingInfo>> = Mutex::new(Vec::new());
 
 #[actix_web::post("/list")]
 pub async fn list(
-    _auth_guard: AuthenticationGuard,
+    auth_guard: AuthenticationGuard,
+    context: web::Data<ActixContext>,
     listing_info: web::Json<ListingInfo>,
 ) -> impl Responder {
-    // Todo - make sure the sender and owner of the token_id are same ***
+    match context.contract.owner_of_token(listing_info.token_id).await {
+        Ok(token_owner) => {
+            if token_owner != auth_guard.user.wallet_address {
+                return HttpResponse::Unauthorized().finish();
+            }
+        }
+        Err(_) => {
+            return HttpResponse::NotFound().finish();
+        }
+    };
 
     LISTINGS.lock().unwrap().push(listing_info.0);
-    HttpResponse::Ok()
+    HttpResponse::Ok().finish()
 }
 
 #[actix_web::get("/listings")]
