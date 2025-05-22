@@ -139,7 +139,7 @@ pub async fn start_server() -> Result<()> {
             .service(metadata)
             .service(marketplace::list)
             .service(marketplace::get_listings)
-            .service(marketplace::buy)
+            .service(marketplace::bid)
             .service(marketplace::update_listing)
             .service(marketplace::cancel_listing)
             .service(authorization::google_oauth_handler)

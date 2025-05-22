@@ -1,6 +1,6 @@
 use super::{
     authentication::AuthenticationGuard,
-    types::{ActixContext, ListingInfo},
+    types::{ActixContext, BidInfo, ListingInfo},
 };
 use actix_web::{HttpResponse, Responder, web};
 use std::sync::Mutex;
@@ -25,7 +25,17 @@ pub async fn list(
         }
     };
 
-    LISTINGS.lock().unwrap().push(listing_info.0);
+    let mut listings = LISTINGS.lock().unwrap();
+
+    if listings
+        .iter_mut()
+        .find(|l| l.token_id == listing_info.token_id)
+        .is_some()
+    {
+        return HttpResponse::Conflict().finish();
+    }
+
+    listings.push(listing_info.0);
     HttpResponse::Ok().finish()
 }
 
@@ -39,34 +49,86 @@ pub async fn get_listings(
     HttpResponse::Ok().json(listing)
 }
 
-#[actix_web::post("/buy/{listing_id}")]
-pub async fn buy(
-    _auth_guard: AuthenticationGuard,
+#[actix_web::post("/bid/{token_id}")]
+pub async fn bid(
+    auth_guard: AuthenticationGuard,
     _context: web::Data<ActixContext>,
-    _listing_id: web::Path<String>,
+    mut input: web::Json<BidInfo>,
+    token_id: web::Path<usize>,
 ) -> impl Responder {
-    // Todo - Transfer ownership of the token
-    // Todo - Transfer fee from the buyer to owner.
-    HttpResponse::NotImplemented().finish()
+    let token_id = token_id.into_inner();
+
+    let mut listings = LISTINGS.lock().unwrap();
+    let listing = listings.iter_mut().find(|l| l.token_id == token_id);
+
+    match listing {
+        Some(listing_info) => {
+            input.bidder = auth_guard.user.wallet_address;
+            listing_info.bids.push(input.into_inner());
+            HttpResponse::Ok().finish()
+        }
+        None => HttpResponse::NotFound().finish(),
+    }
 }
 
-#[actix_web::put("/updateListing/{listing_id}")]
+#[actix_web::put("/updateListing")]
 pub async fn update_listing(
-    _auth_guard: AuthenticationGuard,
-    _context: web::Data<ActixContext>,
-    _listing_id: web::Path<String>,
-    _listing_info: web::Json<ListingInfo>,
+    auth_guard: AuthenticationGuard,
+    context: web::Data<ActixContext>,
+    listing_info: web::Json<ListingInfo>,
 ) -> impl Responder {
-    // Todo - check the ownership of the token and update the listing
-    HttpResponse::NotImplemented().finish()
+    match context.contract.owner_of_token(listing_info.token_id).await {
+        Ok(token_owner) => {
+            if token_owner != auth_guard.user.wallet_address {
+                return HttpResponse::Unauthorized().finish();
+            }
+        }
+        Err(_) => {
+            return HttpResponse::NotFound().finish();
+        }
+    };
+
+    let mut listings = LISTINGS.lock().unwrap();
+    let listing = listings
+        .iter_mut()
+        .find(|l| l.token_id == listing_info.token_id);
+
+    match listing {
+        Some(listing) => {
+            listing.price = listing_info.price;
+            HttpResponse::Ok().finish()
+        }
+        None => HttpResponse::NotFound().finish(),
+    }
 }
 
-#[actix_web::delete("/cancelListing/{listing_id}")]
+#[actix_web::delete("/cancelListing/{token_id}")]
 pub async fn cancel_listing(
-    _auth_guard: AuthenticationGuard,
-    _context: web::Data<ActixContext>,
-    _listing_id: web::Path<String>,
+    auth_guard: AuthenticationGuard,
+    context: web::Data<ActixContext>,
+    token_id: web::Path<usize>,
 ) -> impl Responder {
-    // Todo - check the ownership of the token and remove token from the listing
-    HttpResponse::NotImplemented().finish()
+    let token_id = token_id.into_inner();
+
+    match context.contract.owner_of_token(token_id).await {
+        Ok(token_owner) => {
+            if token_owner != auth_guard.user.wallet_address {
+                return HttpResponse::Unauthorized().finish();
+            }
+        }
+        Err(_) => {
+            return HttpResponse::NotFound().finish();
+        }
+    };
+
+    let mut listings = LISTINGS.lock().unwrap();
+    let removed = listings.iter().position(|l| l.token_id == token_id);
+
+    match removed {
+        Some(index) => {
+            listings.remove(index);
+            HttpResponse::Ok().finish()
+        }
+        None => HttpResponse::NotFound().finish(),
+    }
 }

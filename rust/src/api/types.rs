@@ -25,10 +25,19 @@ pub struct TransferInfo {
     pub token_id: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BidInfo {
+    #[serde(skip_deserializing)]
+    pub bidder: String,
+    pub price: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ListingInfo {
     pub token_id: usize,
     pub price: f64, // Todo : add more fields like expiration
+    #[serde(skip_deserializing)]
+    pub bids: Vec<BidInfo>
 }
 
 #[derive(Debug, Deserialize)]
